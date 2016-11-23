@@ -44,7 +44,7 @@ before_install:
   - sudo /etc/init.d/postgresql restart 9.5
 
   # Local MySQL
-  - sudo apt-get -y install mysql-server-5.5
+  - sudo apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" install mysql-server-5.5
   - sudo apt-get -y install libmyodbc
 
   # Local HIVE installation
