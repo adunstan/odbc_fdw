@@ -2124,9 +2124,23 @@ odbcImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 				{
 					int			excluded = FALSE;
 
-					TableName = (SQLCHAR *) palloc(sizeof(SQLCHAR) * MAXIMUM_TABLE_NAME_LEN);
-					ret = SQLGetData(tables_stmt, SQLTABLES_NAME_COLUMN, SQL_C_CHAR, TableName, MAXIMUM_TABLE_NAME_LEN, &indicator);
-					check_return(ret, "Reading table name", tables_stmt, SQL_HANDLE_STMT);
+					/*
+					 * Some drivers (or possibly foreign sources) such as msodbc/SQLServer
+					 * get upset if these columns are fetched out of order. So do
+					 * catalog (if we're doing it), then Schema, then Table name.
+					 */
+
+					/*-------------------------------------------------------
+					 * Since we haven't specified SQL_ALL_CATALOGS in the call
+					 * to SQLTables we shouldn't get tables from special
+					 * catalogs and only from the regular catalog of the
+					 * database (the catalog name is usually the name of the
+					 * database or blank, but depends on the driver and may
+					 * vary, and can be obtained with: 
+					 *   SQLCHAR *table_catalog = (SQLCHAR *) palloc(sizeof(SQLCHAR) * MAXIMUM_CATALOG_NAME_LEN); 
+					 *   SQLGetData(tables_stmt, SQLTABLES_CATALOG_COLUMN, SQL_C_CHAR, table_catalog, MAXIMUM_CATALOG_NAME_LEN, &indicator);
+					 *---------------------------------------------------------
+					 */
 
 					/*
 					 * Since we're not filtering the SQLTables call by schema
@@ -2154,18 +2168,9 @@ odbcImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 						schema_name = NULL;
 					}
 
-					/*
-					 * Since we haven't specified SQL_ALL_CATALOGS in the call
-					 * to SQLTables we shouldn't get tables from special
-					 * catalogs and only from the regular catalog of the
-					 * database (the catalog name is usually the name of the
-					 * database or blank, but depends on the driver and may
-					 * vary, and can be obtained with: SQLCHAR *table_catalog
-					 * = (SQLCHAR *) palloc(sizeof(SQLCHAR) *
-					 * MAXIMUM_CATALOG_NAME_LEN); SQLGetData(tables_stmt, 1,
-					 * SQL_C_CHAR, table_catalog, MAXIMUM_CATALOG_NAME_LEN,
-					 * &indicator);
-					 */
+					TableName = (SQLCHAR *) palloc(sizeof(SQLCHAR) * MAXIMUM_TABLE_NAME_LEN);
+					ret = SQLGetData(tables_stmt, SQLTABLES_NAME_COLUMN, SQL_C_CHAR, TableName, MAXIMUM_TABLE_NAME_LEN, &indicator);
+					check_return(ret, "Reading table name", tables_stmt, SQL_HANDLE_STMT);
 
 					/*
 					 * And now we'll handle tables excluded by an EXCEPT
