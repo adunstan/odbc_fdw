@@ -673,9 +673,9 @@ odbcGetOptions(Oid server_oid, List *add_options, odbcFdwOptions *extracted_opti
 	mapping = GetUserMapping(GetUserId(), server_oid);
 
 	options = NIL;
-	options = list_concat(options, add_options);
-	options = list_concat(options, server->options);
-	options = list_concat(options, mapping->options);
+	options = list_concat(options, list_copy(add_options));
+	options = list_concat(options, list_copy(server->options));
+	options = list_concat(options, list_copy(mapping->options));
 
 	extract_odbcFdwOptions(options, extracted_options);
 }
