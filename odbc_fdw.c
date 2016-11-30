@@ -728,7 +728,7 @@ getNameQualifierChar(SQLHDBC dbc, StringInfoData *nq_char)
 	           (SQLPOINTER)&name_qualifier_char,
 	           2,
 	           NULL);
-	name_qualifier_char[1] = 0; // some drivers fail to copy the trailing zero
+	name_qualifier_char[1] = 0; /*some drivers fail to copy the trailing zero */
 
 	initStringInfo(nq_char);
 	appendStringInfo(nq_char, "%s", (char *) name_qualifier_char);
@@ -751,7 +751,7 @@ getQuoteChar(SQLHDBC dbc, StringInfoData *q_char)
 	           (SQLPOINTER)&quote_char,
 	            2,
 	            NULL);
-	quote_char[1] = 0; // some drivers fail to copy the trailing zero
+	quote_char[1] = 0; /* some drivers fail to copy the trailing zero */
 
 	initStringInfo(q_char);
 	appendStringInfo(q_char, "%s", (char *) quote_char);
@@ -919,7 +919,7 @@ static Oid oid_from_server_name(char *serverName)
   }
 
   sprintf(sql, "SELECT oid FROM pg_foreign_server where srvname = '%s'", serverName);
-  if (ret = SPI_execute(sql, true, 1) != SPI_OK_SELECT) {
+  if ((ret = SPI_execute(sql, true, 1)) != SPI_OK_SELECT) {
     elog(ERROR, "oid_from_server_name: Get server name from Oid query Failed, SP_exec returned %d.", ret);
   }
 
@@ -944,14 +944,14 @@ odbc_table_size(PG_FUNCTION_ARGS)
   char *serverName = text_to_cstring(PG_GETARG_TEXT_PP(0));
   char *tableName = text_to_cstring(PG_GETARG_TEXT_PP(1));
   char *defname = "table";
-  int tableSize;
+  unsigned int tableSize;
   List *tableOptions = NIL;
   Node *val = (Node *) makeString(tableName);
   DefElem *elem = (DefElem *) makeDefElem(defname, val);
-
-  tableOptions = lappend(tableOptions, elem);
   Oid serverOid = oid_from_server_name(serverName);
   odbcFdwOptions options;
+
+  tableOptions = lappend(tableOptions, elem);
   odbcGetOptions(serverOid, tableOptions, &options);
   odbcGetTableSize(&options, &tableSize);
 
@@ -964,14 +964,14 @@ odbc_query_size(PG_FUNCTION_ARGS)
   char *serverName = text_to_cstring(PG_GETARG_TEXT_PP(0));
   char *sqlQuery = text_to_cstring(PG_GETARG_TEXT_PP(1));
   char *defname = "sql_query";
-  int querySize;
+  unsigned int querySize;
   List *queryOptions = NIL;
   Node *val = (Node *) makeString(sqlQuery);
   DefElem *elem = (DefElem *) makeDefElem(defname, val);
-
-  queryOptions = lappend(queryOptions, elem);
   Oid serverOid = oid_from_server_name(serverName);
   odbcFdwOptions options;
+  
+  queryOptions = lappend(queryOptions, elem);
   odbcGetOptions(serverOid, queryOptions, &options);
   odbcGetTableSize(&options, &querySize);
 
@@ -1004,7 +1004,6 @@ Datum odbc_tables_list(PG_FUNCTION_ARGS)
 	SQLHENV env;
 	SQLHDBC dbc;
 	SQLHSTMT stmt;
-	SQLRETURN ret;
   SQLUSMALLINT i;
   SQLUSMALLINT numColumns = 5;
   SQLUSMALLINT bufferSize = 1024;
@@ -1020,18 +1019,19 @@ Datum odbc_tables_list(PG_FUNCTION_ARGS)
   AttInMetadata *attinmeta;
 
   if (SRF_IS_FIRSTCALL()) {
+    char *serverName = text_to_cstring(PG_GETARG_TEXT_PP(0));
+    int serverOid = oid_from_server_name(serverName);
+    odbcFdwOptions options;
+
     funcctx = SRF_FIRSTCALL_INIT();
-    MemoryContext oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+    oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
     datafctx = (TableDataCtx *) palloc(sizeof(TableDataCtx));
     tableResult = (DataBinding*) palloc( numColumns * sizeof(DataBinding) );
 
-    char *serverName = text_to_cstring(PG_GETARG_TEXT_PP(0));
-    int serverOid = oid_from_server_name(serverName);
 
     rowLimit = PG_GETARG_INT32(1); 
     currentRow = 0;
 
-    odbcFdwOptions options;
     odbcGetOptions(serverOid, NULL, &options);
     odbc_connection(&options, &env, &dbc);
     SQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt);
@@ -1633,7 +1633,6 @@ odbcIterateForeignScan(ForeignScanState *node)
 		{
 			SQLLEN indicator;
 			char * buf;
-			size_t buf_used;
 
 			int mask_index = i - 1;
 			int col_size = list_nth_int(col_size_array, mask_index);
@@ -1660,10 +1659,8 @@ odbcIterateForeignScan(ForeignScanState *node)
 			   And finally, SQL_C_NUMERIC and SQL_C_GUID could also be used.
 			*/
 			buf[0] = 0;
-			buf_used = 0;
 			ret = SQLGetData(stmt, i, SQL_C_CHAR,
 							 buf, sizeof(char) * (col_size+1), &indicator);
-			buf_used = indicator;
 
 			if (ret == SQL_SUCCESS_WITH_INFO)
 			{
@@ -1700,7 +1697,7 @@ odbcIterateForeignScan(ForeignScanState *node)
 						while (1)
 						{
 							size_t buf_len = buf[col_size] ? col_size + 1 : col_size;
-							// Allocate new accumulation buffer if necessary
+							/* Allocate new accumulation buffer if necessary */
 							if (accum_used + buf_len > accum_buffer_size)
 							{
 								char *new_buff;
@@ -1714,11 +1711,11 @@ odbcIterateForeignScan(ForeignScanState *node)
 								accum_buffer = new_buff;
 								accum_buffer[accum_used] = 0;
 							}
-							// Copy part to the accumulation buffer
+							/* Copy part to the accumulation buffer */
 							strncpy(accum_buffer+accum_used, buf, buf_len);
 							accum_used += buf_len;
 							accum_buffer[accum_used] = 0;
-							// Get new part
+							/* Get new part */
 							if (ret != SQL_SUCCESS_WITH_INFO)
 							  break;
 							ret = SQLGetData(stmt, i, SQL_C_CHAR, buf, sizeof(char) * (col_size+1), &indicator);
@@ -1737,7 +1734,6 @@ odbcIterateForeignScan(ForeignScanState *node)
 					}
 					pfree(buf);
 					buf = accum_buffer;
-					buf_used = accum_used;
 				}
 			}
 
@@ -1746,7 +1742,7 @@ odbcIterateForeignScan(ForeignScanState *node)
 				/* Handle null columns */
 				if (indicator == SQL_NULL_DATA)
 				{
-				  // BuildTupleFromCStrings expects NULLs to be NULL pointers
+					/* BuildTupleFromCStrings expects NULLs to be NULL pointers */
 				  values[mapped_pos] = NULL;
 				}
 				else
@@ -1945,8 +1941,10 @@ odbcImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 	}
 	else if (is_blank_string(schema_name))
 	{
-		// This allows overriding and removing the schema, which is necessary
-		// for some schema-less ODBC data sources (e.g. Hive)
+		/*
+		 * This allows overriding and removing the schema, which is necessary
+		 * for some schema-less ODBC data sources (e.g. Hive)
+		 */
 		schema_name = NULL;
 	}
 
@@ -2135,15 +2133,15 @@ odbcImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 				if (SQL_SUCCESS == ret)
 				{
 					ret = SQLGetData(columns_stmt, 4, SQL_C_CHAR, ColumnName, MAXIMUM_COLUMN_NAME_LEN, &indicator);
-					// check_return(ret, "Reading column name", columns_stmt, SQL_HANDLE_STMT);
+					/* check_return(ret, "Reading column name", columns_stmt, SQL_HANDLE_STMT); */
 					ret = SQLGetData(columns_stmt, 5, SQL_C_SSHORT, &DataType, MAXIMUM_COLUMN_NAME_LEN, &indicator);
-					// check_return(ret, "Reading column type", columns_stmt, SQL_HANDLE_STMT);
+					/* check_return(ret, "Reading column type", columns_stmt, SQL_HANDLE_STMT); */
 					ret = SQLGetData(columns_stmt, 7, SQL_C_SLONG, &ColumnSize, 0, &indicator);
-					// check_return(ret, "Reading column size", columns_stmt, SQL_HANDLE_STMT);
+					/* check_return(ret, "Reading column size", columns_stmt, SQL_HANDLE_STMT); */
 					ret = SQLGetData(columns_stmt, 9, SQL_C_SSHORT, &DecimalDigits, 0, &indicator);
-					// check_return(ret, "Reading column decimals", columns_stmt, SQL_HANDLE_STMT);
+					/* check_return(ret, "Reading column decimals", columns_stmt, SQL_HANDLE_STMT); */
 					ret = SQLGetData(columns_stmt, 11, SQL_C_SSHORT, &Nullable, 0, &indicator);
-					// check_return(ret, "Reading column nullable", columns_stmt, SQL_HANDLE_STMT);
+					/* check_return(ret, "Reading column nullable", columns_stmt, SQL_HANDLE_STMT); */
 					sql_data_type(DataType, ColumnSize, DecimalDigits, Nullable, &sql_type);
 					if (is_blank_string(sql_type.data))
 						{
@@ -2167,7 +2165,7 @@ odbcImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 	table_columns_cell = list_head(table_columns);
 	foreach(tables_cell, tables)
 	{
-		// temporarily define vars here...
+		/* temporarily define vars here... */
 		char *table_name = (char*)lfirst(tables_cell);
 		char *columns    = (char*)lfirst(table_columns_cell);
         StringInfoData create_statement;
