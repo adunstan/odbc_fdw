@@ -80,6 +80,7 @@ PG_MODULE_MAGIC;
  * 4: TABLE_TYPE
  * 5: REMARKS
  */
+#define SQLTABLES_CATALOG_COLUMN 1
 #define SQLTABLES_SCHEMA_COLUMN 2
 #define SQLTABLES_NAME_COLUMN 3
 
@@ -538,7 +539,7 @@ sql_data_type(
 			break;
 		case SQL_VARCHAR:
 		case SQL_WVARCHAR:
-			if (column_size <= 255)
+			if (column_size <= 255 && column_size > 0)
 			{
 				appendStringInfo(sql_type, "varchar(%u)", (unsigned) column_size);
 			}
@@ -587,14 +588,18 @@ sql_data_type(
 			appendStringInfo(sql_type, "bigint");
 			break;
 
-			/*
+			/* 
 			 * TODO: Implement these cases properly. See #23
 			 *
 			 * case SQL_BINARY : appendStringInfo(sql_type, "bit(%u)",
-			 * (unsigned)column_size); break; case SQL_VARBINARY :
-			 * appendStringInfo(sql_type, "varbit(%u)",
-			 * (unsigned)column_size); break;
+			 * (unsigned)column_size); break; 
 			 */
+		case SQL_VARBINARY:
+			if (column_size > 0)
+				appendStringInfo(sql_type, "varbit(%u)", (unsigned)column_size);
+			else
+				appendStringInfo(sql_type,"bytea");
+			break;
 		case SQL_LONGVARBINARY:
 			appendStringInfo(sql_type, "bytea");
 			break;
